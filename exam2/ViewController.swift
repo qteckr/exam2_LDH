@@ -12,29 +12,12 @@ class ViewController: UIViewController {
     var type = 0 //0: 재료, 1: 정산, 2: 주문
     
     //초기재료
-    var ingredients = Ingredients(beans: 10000,
-                                  water: 10000,
-                                  milk: 5000)
+    var ingredients = Ingredients()
     
-    let espresso = Coffee(name: "에스프레소",
-                          cost: 4000,
-                          ingredients: Ingredients(beans: 100,
-                                                   water: 300,
-                                                   milk: 0))
+    let espresso = Espresso()
+    let latte = Latte()
+    let americano = Americano()
     
-    let latte = Coffee(name: "라떼",
-                       cost: 5000,
-                       ingredients: Ingredients(beans: 100,
-                                                water: 70,
-                                                milk: 30))
-    
-    let americano = Coffee(name: "아메리카노",
-                           cost: 4500,
-                           ingredients: Ingredients(beans: 100,
-                                                    water: 100,
-                                                    milk: 0))
-    
-    var totalCost = 0
     var orders = [Coffee]()
     
     var ingredientButton: UIButton!
@@ -56,75 +39,40 @@ class ViewController: UIViewController {
         setupLayout()
     }
     
-    @objc private func handleMenu(_ sender: UIButton) {
-        switch sender {
-        case ingredientButton:
-            statusLabel.text = "재료보고"
-            
-            type = 0
-            collectionView.reloadData()
-            
-        case calculateButton:
-            totalCost = espresso.totalCost + latte.totalCost + americano.totalCost
-            
-            statusLabel.text = "정산보고"
-            
-            type = 1
-            collectionView.reloadData()
-            
-        case espressoButton:
-            if requestOrder(menu: espresso) {
-                statusLabel.text = "에스프레소 주문 성공"
-            } else {
-                statusLabel.text = "에스프레소 주문 실패"
-            }
-            
-        case latteButton:
-            if requestOrder(menu: latte) {
-                statusLabel.text = "라떼 주문 성공"
-            } else {
-                statusLabel.text = "라떼 주문 실패"
-            }
-            
-        case americanoButton:
-            if requestOrder(menu: americano) {
-                statusLabel.text = "아메리카노 주문 성공"
-            } else {
-                statusLabel.text = "아메리카노 주문 실패"
-            }
-            
-        default:
-            break
-        }
+    @objc private func handleIngredients() {
+        type = 0
+        statusLabel.text = "재료보고"
+        collectionView.reloadData()
     }
     
-    private func requestOrder(menu coffee: Coffee) -> Bool {
-        let ing = coffee.ingredients
-        
-        guard ingredients.beans >= ing.beans else {
-            showFailAlert()
-            return false
+    @objc private func handleCalculate() {
+        type = 1
+        statusLabel.text = "정산보고"
+        collectionView.reloadData()
+    }
+    
+    @objc private func handleOrder(_ sender: UIButton) {
+        guard let menu = Menu.init(rawValue: sender.tag) else {
+            return
         }
-        ingredients.beans -= ing.beans
         
-        guard ingredients.water >= ing.water else {
-            showFailAlert()
-            return false
+        let coffee: Coffee
+        switch menu {
+        case .espresso : coffee = espresso
+        case .latte    : coffee = latte
+        case .americano: coffee = americano
         }
-        ingredients.water -= ing.water
-
-        guard ingredients.milk >= ing.milk else {
-            showFailAlert()
-            return false
-        }
-        ingredients.milk -= ing.milk
         
-        coffee.addCost()
-        orders.append(coffee)
+        if ingredients.orderable(coffee.ingredients) {
+            orders.append(coffee)
+            statusLabel.text = menu.title + "주문 성공"
+        } else {
+            showFailAlert()
+            statusLabel.text = menu.title + "주문 실패"
+        }
         
         type = 2
         collectionView.reloadData()
-        return true
     }
     
     private func showFailAlert() {
@@ -142,14 +90,7 @@ class ViewController: UIViewController {
 extension ViewController: UICollectionViewDataSource, UICollectionViewDelegateFlowLayout {
     
     func numberOfSections(in collectionView: UICollectionView) -> Int {
-        switch type {
-        case 0: //재료
-            return 1
-        case 1: //정산
-            return 3
-        default: //주문
-            return 0
-        }
+        return type == 1 ? 3 : 1
     }
     
     func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
@@ -157,7 +98,7 @@ extension ViewController: UICollectionViewDataSource, UICollectionViewDelegateFl
         case 0: //재료 잔고 || 총수익금 || 주문 정보
             return 1
         case 1: //제품별 매출 통계
-            return 3
+            return Menu.allCases.count
         default: //주문내역
             return orders.count
         }
@@ -172,8 +113,15 @@ extension ViewController: UICollectionViewDataSource, UICollectionViewDelegateFl
         } else { //주문
             switch indexPath.section {
             case 0: //총수익금
-                cell.totalCost = totalCost
+                cell.totalCost = orders.map({$0.cost}).reduce(0, {$0 + $1})
+                
             case 1: //제품별 매출 통계
+                
+                let menu = Menu.init(rawValue: indexPath.item)
+                cell.cost = orders.filter({ coffee in
+                    return coffee.name == menu?.title
+                }).map({$0.cost}).reduce(0, {$0 + $1})
+                
                 if indexPath.item == 0 {
                     cell.coffee = espresso
                 } else if indexPath.item == 1 {
@@ -207,11 +155,7 @@ extension ViewController: UICollectionViewDataSource, UICollectionViewDelegateFl
     }
     
     func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, insetForSectionAt section: Int) -> UIEdgeInsets {
-        if type == 0 {
-            return .zero
-        } else {
-            return UIEdgeInsets(top: 5, left: 10, bottom: 5, right: 10)
-        }
+        return type == 0 ? .zero : UIEdgeInsets(top: 5, left: 10, bottom: 5, right: 10)
     }
 }
 
@@ -224,19 +168,22 @@ extension ViewController {
     
     private func setupControls() {
         ingredientButton = UIButton.menuButton(title: "재료보고")
-        ingredientButton.addTarget(self, action: #selector(handleMenu), for: .touchUpInside)
+        ingredientButton.addTarget(self, action: #selector(handleIngredients), for: .touchUpInside)
         
         calculateButton = UIButton.menuButton(title: "정산보고")
-        calculateButton.addTarget(self, action: #selector(handleMenu), for: .touchUpInside)
+        calculateButton.addTarget(self, action: #selector(handleCalculate), for: .touchUpInside)
             
         espressoButton = UIButton.menuButton(title: "에스프레소")
-        espressoButton.addTarget(self, action: #selector(handleMenu), for: .touchUpInside)
+        espressoButton.tag = Menu.espresso.rawValue
+        espressoButton.addTarget(self, action: #selector(handleOrder), for: .touchUpInside)
 
         latteButton = UIButton.menuButton(title: "라떼")
-        latteButton.addTarget(self, action: #selector(handleMenu), for: .touchUpInside)
+        latteButton.tag = Menu.latte.rawValue
+        latteButton.addTarget(self, action: #selector(handleOrder), for: .touchUpInside)
         
         americanoButton = UIButton.menuButton(title: "아메리카노")
-        americanoButton.addTarget(self, action: #selector(handleMenu), for: .touchUpInside)
+        americanoButton.tag = Menu.americano.rawValue
+        americanoButton.addTarget(self, action: #selector(handleOrder), for: .touchUpInside)
         
         stackView1 = {
             let sv = UIStackView(arrangedSubviews: [ingredientButton, calculateButton])

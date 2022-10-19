@@ -40,6 +40,7 @@ class Cell: UICollectionViewCell {
         }
     }
     
+    var cost = 0
     var coffee: Coffee? {
         willSet {
             titleLabel.text = nil
@@ -48,7 +49,7 @@ class Cell: UICollectionViewCell {
         didSet {
             guard let coffee = coffee else {return}
             titleLabel.textAlignment = .left
-            titleLabel.text = "\(coffee.name) 수익금: \(coffee.totalCost.toDecimal())원"
+            titleLabel.text = "\(coffee.name) 수익금: \(cost.toDecimal())원"
         }
     }
     
