@@ -8,12 +8,40 @@
 import UIKit
 
 class ViewController: UIViewController {
-
-    var menu1Button: UIButton!
-    var menu2Button: UIButton!
-    var menu3Button: UIButton!
-    var menu4Button: UIButton!
-    var menu5Button: UIButton!
+    
+    var type = 0 //0: 재료, 1: 정산, 2: 주문
+    
+    //초기재료
+    var ingredients = Ingredients(beans: 10000,
+                                  water: 10000,
+                                  milk: 5000)
+    
+    let espresso = Coffee(name: "에스프레소",
+                          cost: 4000,
+                          ingredients: Ingredients(beans: 100,
+                                                   water: 300,
+                                                   milk: 0))
+    
+    let latte = Coffee(name: "라떼",
+                       cost: 5000,
+                       ingredients: Ingredients(beans: 100,
+                                                water: 70,
+                                                milk: 30))
+    
+    let americano = Coffee(name: "아메리카노",
+                           cost: 4500,
+                           ingredients: Ingredients(beans: 100,
+                                                    water: 100,
+                                                    milk: 0))
+    
+    var totalCost = 0
+    var orders = [Coffee]()
+    
+    var ingredientButton: UIButton!
+    var calculateButton: UIButton!
+    var espressoButton: UIButton!
+    var latteButton: UIButton!
+    var americanoButton: UIButton!
     var stackView1: UIStackView!
     var stackView2: UIStackView!
     var statusLabel: UILabel!
@@ -23,54 +51,195 @@ class ViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         
-        navigationItem.title = "exam2"
-        view.backgroundColor = UIColor(white: 0.9, alpha: 1)
-        
+        setupNavigation()
         setupControls()
         setupLayout()
     }
     
-    @objc private func handleMenu1() {
-        print("didTapMenu1")
+    @objc private func handleMenu(_ sender: UIButton) {
+        switch sender {
+        case ingredientButton:
+            statusLabel.text = "재료보고"
+            
+            type = 0
+            collectionView.reloadData()
+            
+        case calculateButton:
+            totalCost = espresso.totalCost + latte.totalCost + americano.totalCost
+            
+            statusLabel.text = "정산보고"
+            
+            type = 1
+            collectionView.reloadData()
+            
+        case espressoButton:
+            if requestOrder(menu: espresso) {
+                statusLabel.text = "에스프레소 주문 성공"
+            } else {
+                statusLabel.text = "에스프레소 주문 실패"
+            }
+            
+        case latteButton:
+            if requestOrder(menu: latte) {
+                statusLabel.text = "라떼 주문 성공"
+            } else {
+                statusLabel.text = "라떼 주문 실패"
+            }
+            
+        case americanoButton:
+            if requestOrder(menu: americano) {
+                statusLabel.text = "아메리카노 주문 성공"
+            } else {
+                statusLabel.text = "아메리카노 주문 실패"
+            }
+            
+        default:
+            break
+        }
     }
     
-    @objc private func handleMenu2() {
-        print("didTapMenu2")
+    private func requestOrder(menu coffee: Coffee) -> Bool {
+        let ing = coffee.ingredients
+        
+        guard ingredients.beans >= ing.beans else {
+            showFailAlert()
+            return false
+        }
+        ingredients.beans -= ing.beans
+        
+        guard ingredients.water >= ing.water else {
+            showFailAlert()
+            return false
+        }
+        ingredients.water -= ing.water
+
+        guard ingredients.milk >= ing.milk else {
+            showFailAlert()
+            return false
+        }
+        ingredients.milk -= ing.milk
+        
+        coffee.addCost()
+        orders.append(coffee)
+        
+        type = 2
+        collectionView.reloadData()
+        return true
     }
     
-    @objc private func handleMenu3() {
-        print("didTapMenu3")
-    }
-    
-    @objc private func handleMenu4() {
-        print("didTapMenu4")
-    }
-    
-    @objc private func handleMenu5() {
-        print("didTapMenu5")
+    private func showFailAlert() {
+        let alert = UIAlertController(title: "재료소진", message: "종료됩니다.", preferredStyle: .alert)
+        
+        let done = UIAlertAction(title: "확인", style: .default) { _ in
+            exit(EXIT_SUCCESS)
+        }
+        
+        alert.addAction(done)
+        present(alert, animated: true)
     }
 }
 
+extension ViewController: UICollectionViewDataSource, UICollectionViewDelegateFlowLayout {
+    
+    func numberOfSections(in collectionView: UICollectionView) -> Int {
+        switch type {
+        case 0: //재료
+            return 1
+        case 1: //정산
+            return 3
+        default: //주문
+            return 0
+        }
+    }
+    
+    func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
+        switch section {
+        case 0: //재료 잔고 || 총수익금 || 주문 정보
+            return 1
+        case 1: //제품별 매출 통계
+            return 3
+        default: //주문내역
+            return orders.count
+        }
+    }
+    
+    func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
+        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: Cell.cellId, for: indexPath) as! Cell
+
+        if type == 0 { //재료
+            cell.ingredients = ingredients
+            
+        } else { //주문
+            switch indexPath.section {
+            case 0: //총수익금
+                cell.totalCost = totalCost
+            case 1: //제품별 매출 통계
+                if indexPath.item == 0 {
+                    cell.coffee = espresso
+                } else if indexPath.item == 1 {
+                    cell.coffee = latte
+                } else {
+                    cell.coffee = americano
+                }
+                
+            default: //주문 내역
+                cell.index = indexPath.item + 1
+                cell.order = orders[indexPath.item]
+            }
+        }
+        
+        return cell
+    }
+    
+    func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
+        switch type {
+        case 0:
+            return collectionView.frame.size
+        case 1:
+            return CGSize(width: collectionView.frame.width, height: 50)
+        default:
+            return .zero
+        }
+    }
+    
+    func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, minimumLineSpacingForSectionAt section: Int) -> CGFloat {
+        return 3
+    }
+    
+    func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, insetForSectionAt section: Int) -> UIEdgeInsets {
+        if type == 0 {
+            return .zero
+        } else {
+            return UIEdgeInsets(top: 5, left: 10, bottom: 5, right: 10)
+        }
+    }
+}
+
+//for View
 extension ViewController {
     
+    private func setupNavigation() {
+        navigationItem.title = "exam2"
+    }
+    
     private func setupControls() {
-        menu1Button = UIButton.menuButton(title: "메뉴1")
-        menu1Button.addTarget(self, action: #selector(handleMenu1), for: .touchUpInside)
+        ingredientButton = UIButton.menuButton(title: "재료보고")
+        ingredientButton.addTarget(self, action: #selector(handleMenu), for: .touchUpInside)
         
-        menu2Button = UIButton.menuButton(title: "메뉴2")
-        menu2Button.addTarget(self, action: #selector(handleMenu2), for: .touchUpInside)
+        calculateButton = UIButton.menuButton(title: "정산보고")
+        calculateButton.addTarget(self, action: #selector(handleMenu), for: .touchUpInside)
             
-        menu3Button = UIButton.menuButton(title: "메뉴3")
-        menu3Button.addTarget(self, action: #selector(handleMenu3), for: .touchUpInside)
+        espressoButton = UIButton.menuButton(title: "에스프레소")
+        espressoButton.addTarget(self, action: #selector(handleMenu), for: .touchUpInside)
 
-        menu4Button = UIButton.menuButton(title: "메뉴4")
-        menu4Button.addTarget(self, action: #selector(handleMenu4), for: .touchUpInside)
+        latteButton = UIButton.menuButton(title: "라떼")
+        latteButton.addTarget(self, action: #selector(handleMenu), for: .touchUpInside)
         
-        menu5Button = UIButton.menuButton(title: "메뉴5")
-        menu5Button.addTarget(self, action: #selector(handleMenu5), for: .touchUpInside)
+        americanoButton = UIButton.menuButton(title: "아메리카노")
+        americanoButton.addTarget(self, action: #selector(handleMenu), for: .touchUpInside)
         
         stackView1 = {
-            let sv = UIStackView(arrangedSubviews: [menu1Button, menu2Button])
+            let sv = UIStackView(arrangedSubviews: [ingredientButton, calculateButton])
             sv.layer.masksToBounds = true
             sv.layer.cornerRadius = 10
             sv.axis = .horizontal
@@ -80,7 +249,7 @@ extension ViewController {
         }()
         
         stackView2 = {
-            let sv = UIStackView(arrangedSubviews: [menu3Button, menu4Button, menu5Button])
+            let sv = UIStackView(arrangedSubviews: [espressoButton, latteButton, americanoButton])
             sv.layer.masksToBounds = true
             sv.layer.cornerRadius = 10
             sv.axis = .horizontal
@@ -94,7 +263,7 @@ extension ViewController {
             l.layer.masksToBounds = true
             l.layer.cornerRadius = 10
             l.backgroundColor = .white
-            l.text = "라벨"
+            l.text = "재료보고"
             l.textAlignment = .center
             l.textColor = .black
             l.font = .boldSystemFont(ofSize: 25)
@@ -128,6 +297,8 @@ extension ViewController {
     }
 
     private func setupLayout() {
+        view.backgroundColor = UIColor(white: 0.9, alpha: 1)
+        
         view.addSubview(stackView)
         stackView.anchor(t: view.safeAreaLayoutGuide.topAnchor, l: view.leftAnchor, b: nil, r: view.rightAnchor, ct: 25, cl: 15, cb: 0, cr: 15)
         NSLayoutConstraint.activate([
@@ -140,44 +311,5 @@ extension ViewController {
         
         view.addSubview(collectionView)
         collectionView.anchor(t: stackView.bottomAnchor, l: view.leftAnchor, b: view.safeAreaLayoutGuide.bottomAnchor, r: view.rightAnchor, ct: 15, cl: 15, cr: 15)
-    }
-}
-
-extension ViewController: UICollectionViewDataSource, UICollectionViewDelegateFlowLayout {
-    
-    func numberOfSections(in collectionView: UICollectionView) -> Int {
-        return 1
-    }
-    
-    func collectionView(_ collectionView: UICollectionView, numberOfItemsInSection section: Int) -> Int {
-        return 20
-    }
-    
-    func collectionView(_ collectionView: UICollectionView, cellForItemAt indexPath: IndexPath) -> UICollectionViewCell {
-        let cell = collectionView.dequeueReusableCell(withReuseIdentifier: Cell.cellId, for: indexPath) as! Cell
-        
-        cell.model = DataModel(title: String(indexPath.item + 1))
-        return cell
-    }
-    
-    func collectionView(_ collectionView: UICollectionView, didSelectItemAt indexPath: IndexPath) {
-        let cell = collectionView.cellForItem(at: indexPath)
-        guard let cell = cell as? Cell,
-              let model = cell.model
-        else {return}
-        
-        print("didSelectItemAt:", model.title ?? "nil")
-    }
-    
-    func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, sizeForItemAt indexPath: IndexPath) -> CGSize {
-        return CGSize(width: collectionView.frame.width, height: 50)
-    }
-    
-    func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, minimumLineSpacingForSectionAt section: Int) -> CGFloat {
-        return 3
-    }
-    
-    func collectionView(_ collectionView: UICollectionView, layout collectionViewLayout: UICollectionViewLayout, insetForSectionAt section: Int) -> UIEdgeInsets {
-        return UIEdgeInsets(top: 5, left: 10, bottom: 5, right: 10)
     }
 }
